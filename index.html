@@ -55,7 +55,6 @@ a:hover{text-decoration:underline}
 /* Table Container */
 .table-wrap{padding:0 24px 24px;overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}
-thead{position:sticky;top:49px;z-index:50}
 th{background:#0f3460;padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;border-bottom:2px solid #2a2a4a;cursor:pointer;user-select:none;white-space:nowrap;position:relative}
 th:hover{color:#e0e0e0}
 th .sort-arrow{margin-left:4px;font-size:10px;color:#e94560}
@@ -120,10 +119,7 @@ tr.group-even:hover td{background:rgba(233,69,96,0.08)}
 
 <!-- Summary Cards -->
 <div class="summary" id="summary" style="display:none">
-  <div class="card"><div class="card-label">Active Stocks</div><div class="card-value" id="totalStocks">-</div></div>
-  <div class="card"><div class="card-label">Best 1st Increment ROI</div><div class="card-value green" id="bestRoi">-</div></div>
-  <div class="card"><div class="card-label">Best Stock</div><div class="card-value pink" id="bestStock">-</div></div>
-  <div class="card"><div class="card-label">Data Points</div><div class="card-value" id="dataPoints">-</div></div>
+  <div class="card"><div class="card-label">Active Dividend Stocks</div><div class="card-value" id="totalStocks">-</div></div>
 </div>
 
 <!-- Table -->
@@ -141,7 +137,8 @@ tr.group-even:hover td{background:rgba(233,69,96,0.08)}
 <script>
 // ===== CONFIG =====
 const COLUMNS = [
-  {key:'stock',label:'Stock',sortable:true,type:'string'},
+  {key:'ticker',label:'Ticker',sortable:true,type:'string'},
+  {key:'stockName',label:'Stock Name',sortable:true,type:'string'},
   {key:'increment',label:'Inc.',sortable:true,type:'number'},
   {key:'sharePrice',label:'Share Price',sortable:true,type:'number'},
   {key:'sharesRequired',label:'Shares Required',sortable:true,type:'number'},
@@ -365,9 +362,8 @@ async function refreshData(){
         rows.push({
           stockId:s.id,
           stockName:s.name,
-          stockAcronym:s.acronym,
+          ticker:s.acronym,
           stockLogo:s.images.logo,
-          stock:s.acronym+' - '+s.name,
           increment:inc,
           sharePrice:price,
           sharesRequired:sharesNeeded,
@@ -402,12 +398,6 @@ async function refreshData(){
 
 function updateSummary(stockCount){
   document.getElementById('totalStocks').textContent=stockCount;
-  document.getElementById('dataPoints').textContent=rows.length;
-  const first=rows.filter(r=>r.increment===1&&r.roi>0).sort((a,b)=>b.roi-a.roi);
-  if(first.length>0){
-    document.getElementById('bestRoi').textContent=first[0].roi.toFixed(2)+'%';
-    document.getElementById('bestStock').textContent=first[0].stockAcronym;
-  }
 }
 
 // ===== RENDER =====
@@ -469,7 +459,7 @@ function renderBody(){
   // Track stock groups for alternating backgrounds
   let lastStock='';let groupIdx=0;
   for(const row of sorted){
-    if(row.stockAcronym!==lastStock){groupIdx++;lastStock=row.stockAcronym}
+    if(row.ticker!==lastStock){groupIdx++;lastStock=row.ticker}
     const tr=document.createElement('tr');
     if(groupIdx%2===0)tr.classList.add('group-even');
 
@@ -484,8 +474,10 @@ function renderBody(){
 
 function formatCell(key,row){
   switch(key){
-    case 'stock':
-      return `<img src="${row.stockLogo}" class="stock-logo" alt="" onerror="this.style.display='none'">${row.stockAcronym} - ${row.stockName}`;
+    case 'ticker':
+      return `<img src="${row.stockLogo}" class="stock-logo" alt="" onerror="this.style.display='none'"><strong>${row.ticker}</strong>`;
+    case 'stockName':
+      return row.stockName;
     case 'increment':
       return `<span class="increment-badge">${row.increment}</span>`;
     case 'sharePrice':
@@ -504,10 +496,20 @@ function formatCell(key,row){
       return row.annualReturn>0?'$'+fmtNum(row.annualReturn,0):'<span style="color:#555">N/A</span>';
     case 'roi':
       if(row.roi<=0)return '<span style="color:#555">N/A</span>';
-      const cls=row.roi>=50?'roi-high':row.roi>=25?'roi-mid':'roi-low';
-      return `<span class="${cls}">${row.roi.toFixed(2)}%</span>`;
+      return `<span class="${getRoiClass(row.roi)}">${row.roi.toFixed(2)}%</span>`;
     default:return '';
   }
+}
+
+function getRoiClass(roi){
+  // Color relative to the dataset: top third green, middle yellow, bottom red
+  const roiValues=rows.filter(r=>r.roi>0).map(r=>r.roi).sort((a,b)=>b-a);
+  if(roiValues.length===0)return 'roi-mid';
+  const top=roiValues[Math.floor(roiValues.length/3)]||0;
+  const mid=roiValues[Math.floor(roiValues.length*2/3)]||0;
+  if(roi>=top)return 'roi-high';
+  if(roi>=mid)return 'roi-mid';
+  return 'roi-low';
 }
 
 function fmtNum(n,dec){
