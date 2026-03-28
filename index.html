@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torn Stock ROI Calculator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;font-size:14px;min-height:100vh}
+a{color:#42a5f5;text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Header */
+.header{background:#16213e;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #2a2a4a;position:sticky;top:0;z-index:100}
+.header h1{font-size:18px;color:#e94560;font-weight:700;letter-spacing:0.5px}
+.header-right{display:flex;align-items:center;gap:12px}
+.btn{background:#0f3460;color:#e0e0e0;border:1px solid #2a2a4a;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit;transition:background 0.2s}
+.btn:hover{background:#1a4a8a}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-accent{background:#e94560;border-color:#e94560;color:#fff}
+.btn-accent:hover{background:#c73a52}
+
+/* Config Overlay */
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:200}
+.overlay.hidden{display:none}
+.config-box{background:#16213e;border:1px solid #2a2a4a;border-radius:8px;padding:32px;width:400px;max-width:90vw}
+.config-box h2{color:#e94560;font-size:20px;margin-bottom:8px;text-align:center}
+.config-box p{color:#888;font-size:12px;margin-bottom:20px;text-align:center}
+.config-box label{display:block;font-size:12px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px}
+.config-box input[type="text"]{width:100%;background:#0f3460;border:1px solid #2a2a4a;color:#e0e0e0;padding:10px 12px;border-radius:4px;font-size:14px;font-family:inherit;margin-bottom:16px}
+.config-box input[type="text"]::placeholder{color:#555}
+.config-box input[type="text"]:focus{outline:none;border-color:#e94560}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.checkbox-row input[type="checkbox"]{accent-color:#e94560}
+.checkbox-row label{margin:0;text-transform:none;font-size:13px;color:#e0e0e0}
+.config-error{color:#e94560;font-size:12px;margin-bottom:12px;min-height:16px}
+.config-box .btn{width:100%;padding:10px;font-size:14px}
+
+/* Progress */
+.progress-wrap{background:#0f3460;height:4px;width:100%;display:none}
+.progress-wrap.active{display:block}
+.progress-bar{height:100%;background:#e94560;width:0%;transition:width 0.3s}
+.progress-text{text-align:center;padding:4px;font-size:11px;color:#888;display:none}
+.progress-text.active{display:block}
+
+/* Summary Cards */
+.summary{display:flex;gap:12px;padding:16px 24px;flex-wrap:wrap}
+.card{background:#16213e;border:1px solid #2a2a4a;border-radius:6px;padding:12px 16px;min-width:160px;flex:1}
+.card-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px}
+.card-value{font-size:20px;font-weight:700}
+.card-value.green{color:#4caf50}
+.card-value.yellow{color:#ffc107}
+.card-value.pink{color:#e94560}
+
+/* Table Container */
+.table-wrap{padding:0 24px 24px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:900px}
+thead{position:sticky;top:49px;z-index:50}
+th{background:#0f3460;padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;border-bottom:2px solid #2a2a4a;cursor:pointer;user-select:none;white-space:nowrap;position:relative}
+th:hover{color:#e0e0e0}
+th .sort-arrow{margin-left:4px;font-size:10px;color:#e94560}
+th.dragging{opacity:0.4}
+th.drag-over{border-left:2px solid #e94560}
+td{padding:8px 12px;border-bottom:1px solid #1e1e3a;white-space:nowrap;font-size:13px}
+tr:hover td{background:rgba(233,69,96,0.05)}
+tr.group-even td{background:rgba(15,52,96,0.3)}
+tr.group-even:hover td{background:rgba(233,69,96,0.08)}
+
+/* ROI Colors */
+.roi-high{color:#4caf50;font-weight:700}
+.roi-mid{color:#ffc107;font-weight:700}
+.roi-low{color:#e94560;font-weight:700}
+.dividend-label{color:#42a5f5}
+.increment-badge{display:inline-block;background:#0f3460;border:1px solid #2a2a4a;border-radius:3px;padding:1px 8px;font-size:11px;min-width:30px;text-align:center}
+.stock-logo{width:20px;height:20px;vertical-align:middle;margin-right:6px;border-radius:2px}
+
+/* Footer */
+.footer{text-align:center;padding:16px;font-size:11px;color:#555;border-top:1px solid #2a2a4a}
+
+/* Responsive */
+@media(max-width:768px){
+  .summary{padding:12px}
+  .table-wrap{padding:0 12px 12px}
+  .header{padding:12px}
+  .card{min-width:120px}
+}
+</style>
+</head>
+<body>
+
+<!-- Config Overlay -->
+<div class="overlay" id="overlay">
+  <div class="config-box">
+    <h2>Torn Stock ROI Calculator</h2>
+    <p>Compare annualized returns on stock dividends</p>
+    <label>API Key</label>
+    <input type="text" id="apiKeyInput" placeholder="Enter your Torn API key (Public access)" autocomplete="off">
+    <div class="checkbox-row">
+      <input type="checkbox" id="rememberMe">
+      <label for="rememberMe">Remember me on this browser</label>
+    </div>
+    <div class="config-error" id="configError"></div>
+    <button class="btn btn-accent" id="startBtn" onclick="startApp()">Calculate</button>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>Torn Stock ROI Calculator</h1>
+  <div class="header-right">
+    <span id="lastUpdated" style="font-size:11px;color:#888"></span>
+    <button class="btn" id="refreshBtn" onclick="refreshData()" disabled>Refresh</button>
+    <button class="btn" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+<div class="progress-text" id="progressText"></div>
+
+<!-- Summary Cards -->
+<div class="summary" id="summary" style="display:none">
+  <div class="card"><div class="card-label">Active Stocks</div><div class="card-value" id="totalStocks">-</div></div>
+  <div class="card"><div class="card-label">Best 1st Increment ROI</div><div class="card-value green" id="bestRoi">-</div></div>
+  <div class="card"><div class="card-label">Best Stock</div><div class="card-value pink" id="bestStock">-</div></div>
+  <div class="card"><div class="card-label">Data Points</div><div class="card-value" id="dataPoints">-</div></div>
+</div>
+
+<!-- Table -->
+<div class="table-wrap" id="tableWrap" style="display:none">
+  <table id="stockTable">
+    <thead><tr id="headerRow"></tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<div class="footer">
+  Torn Stock ROI Calculator &middot; Data from <a href="https://www.torn.com/api.html" target="_blank">Torn API v2</a> &middot; <a href="https://github.com/tkph/Torn-Stock-Tool" target="_blank">GitHub</a>
+</div>
+
+<script>
+// ===== CONFIG =====
+const COLUMNS = [
+  {key:'stock',label:'Stock',sortable:true,type:'string'},
+  {key:'increment',label:'Inc.',sortable:true,type:'number'},
+  {key:'sharePrice',label:'Share Price',sortable:true,type:'number'},
+  {key:'sharesRequired',label:'Shares Required',sortable:true,type:'number'},
+  {key:'investmentCost',label:'Investment Cost',sortable:true,type:'number'},
+  {key:'dividend',label:'Dividend',sortable:false,type:'string'},
+  {key:'dividendValue',label:'Dividend Value',sortable:true,type:'number'},
+  {key:'frequency',label:'Frequency',sortable:true,type:'number'},
+  {key:'annualReturn',label:'Annual Return',sortable:true,type:'number'},
+  {key:'roi',label:'ROI %',sortable:true,type:'number'}
+];
+
+// Mapping: stock ID -> {type, itemId, qty, label}
+// type: 'cash','item','points','energy','nerve','happiness','property','ammo','clothing'
+const DIVIDEND_MAP = {
+  1:  {type:'cash',amount:50000000,label:'$50,000,000'},
+  4:  {type:'item',itemId:368,qty:1,label:'1x Lawyer\'s Business Card'},
+  5:  {type:'cash',amount:12000000,label:'$12,000,000'},
+  6:  {type:'cash',amount:4000000,label:'$4,000,000'},
+  7:  {type:'item',itemId:365,qty:1,label:'1x Box of Medical Supplies'},
+  9:  {type:'cash',amount:1000000,label:'$1,000,000'},
+  10: {type:'cash',amount:80000000,label:'$80,000,000'},
+  12: {type:'cash',amount:25000000,label:'$25,000,000'},
+  15: {type:'item',itemId:367,qty:1,label:'1x Feathery Hotel Coupon'},
+  16: {type:'item',itemId:370,qty:1,label:'1x Drug Pack'},
+  17: {type:'item',itemId:369,qty:1,label:'1x Lottery Voucher'},
+  18: {type:'item',itemId:366,qty:1,label:'1x Erotic DVD'},
+  19: {type:'item',itemId:364,qty:1,label:'1x Box of Grenades'},
+  22: {type:'special',label:'1x Random Property',note:'Non-tradeable'},
+  24: {type:'item',itemId:818,qty:1,label:'1x Six-Pack of Energy Drink'},
+  27: {type:'special',label:'1x Ammunition Pack',note:'Non-tradeable'},
+  28: {type:'happiness',amount:1000,label:'1000 happiness'},
+  29: {type:'energy',amount:100,label:'100 energy'},
+  31: {type:'special',label:'1x Clothing Cache',note:'Non-tradeable'},
+  32: {type:'item',itemId:817,qty:1,label:'1x Six-Pack of Alcohol'},
+  33: {type:'nerve',amount:50,label:'50 nerve'},
+  35: {type:'points',amount:100,label:'100 points'}
+};
+
+let apiKey = '';
+let rows = [];
+let columnOrder = COLUMNS.map(c => c.key);
+let sortKey = 'roi';
+let sortDir = 'desc';
+let dragCol = null;
+
+// ===== STORAGE =====
+function saveCookie(k,v,days){try{const d=new Date();d.setTime(d.getTime()+days*86400000);document.cookie=k+'='+encodeURIComponent(v)+';expires='+d.toUTCString()+';path=/;SameSite=Lax'}catch(e){}}
+function getCookie(k){try{const m=document.cookie.match('(^|;)\\s*'+k+'=([^;]*)');return m?decodeURIComponent(m[2]):null}catch(e){return null}}
+function deleteCookie(k){document.cookie=k+'=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'}
+function saveConfig(){
+  if(!document.getElementById('rememberMe').checked)return;
+  saveCookie('tornStockApiKey',apiKey,90);
+  try{localStorage.setItem('tornStockApiKey',apiKey)}catch(e){}
+}
+function loadConfig(){
+  let key=getCookie('tornStockApiKey');
+  if(!key)try{key=localStorage.getItem('tornStockApiKey')}catch(e){}
+  return key;
+}
+function savePrefs(){
+  try{
+    localStorage.setItem('tornStockColOrder',JSON.stringify(columnOrder));
+    localStorage.setItem('tornStockSortKey',sortKey);
+    localStorage.setItem('tornStockSortDir',sortDir);
+  }catch(e){}
+}
+function loadPrefs(){
+  try{
+    const co=localStorage.getItem('tornStockColOrder');
+    if(co){const parsed=JSON.parse(co);if(parsed.length===COLUMNS.length)columnOrder=parsed}
+    const sk=localStorage.getItem('tornStockSortKey');if(sk)sortKey=sk;
+    const sd=localStorage.getItem('tornStockSortDir');if(sd)sortDir=sd;
+  }catch(e){}
+}
+
+// ===== API =====
+async function apiCall(endpoint){
+  const url=`https://api.torn.com/v2/${endpoint}${endpoint.includes('?')?'&':'?'}key=${apiKey}&comment=TornStockROI`;
+  const r=await fetch(url);
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.error||'API error');
+  return d;
+}
+async function apiCallV1(endpoint){
+  const url=`https://api.torn.com/${endpoint}${endpoint.includes('?')?'&':'?'}key=${apiKey}&comment=TornStockROI`;
+  const r=await fetch(url);
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.error||'API error');
+  return d;
+}
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded',()=>{
+  loadPrefs();
+  const saved=loadConfig();
+  if(saved){
+    apiKey=saved;
+    document.getElementById('apiKeyInput').value=saved;
+    document.getElementById('rememberMe').checked=true;
+  }
+  document.getElementById('apiKeyInput').addEventListener('keydown',e=>{if(e.key==='Enter')startApp()});
+});
+
+async function startApp(){
+  const btn=document.getElementById('startBtn');
+  const err=document.getElementById('configError');
+  const input=document.getElementById('apiKeyInput').value.trim();
+  if(!input){err.textContent='Please enter an API key';return}
+  btn.disabled=true;btn.textContent='Validating...';err.textContent='';
+  try{
+    apiKey=input;
+    await apiCall('key/info');
+    saveConfig();
+    document.getElementById('overlay').classList.add('hidden');
+    await refreshData();
+  }catch(e){
+    err.textContent=e.message||'Invalid API key';
+  }finally{
+    btn.disabled=false;btn.textContent='Calculate';
+  }
+}
+
+function logout(){
+  apiKey='';
+  deleteCookie('tornStockApiKey');
+  try{localStorage.removeItem('tornStockApiKey')}catch(e){}
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('apiKeyInput').value='';
+  document.getElementById('summary').style.display='none';
+  document.getElementById('tableWrap').style.display='none';
+}
+
+// ===== DATA FETCH =====
+async function refreshData(){
+  const refreshBtn=document.getElementById('refreshBtn');
+  refreshBtn.disabled=true;
+  showProgress(true);
+  setProgress(5,'Fetching stock data...');
+  try{
+    // 1. Fetch all stocks
+    const stockData=await apiCall('torn/stocks');
+    const allStocks=stockData.stocks;
+    // Filter active-benefit only
+    const activeStocks=allStocks.filter(s=>!s.bonus.passive && DIVIDEND_MAP[s.id]);
+    setProgress(15,'Fetching item market prices...');
+
+    // 2. Collect unique item IDs to look up
+    const itemIds=new Set();
+    let needPoints=false;
+    for(const s of activeStocks){
+      const div=DIVIDEND_MAP[s.id];
+      if(div.type==='item')itemIds.add(div.itemId);
+      if(div.type==='points')needPoints=true;
+    }
+
+    // 3. Fetch item market prices
+    const itemPrices={};
+    const itemIdArr=[...itemIds];
+    for(let i=0;i<itemIdArr.length;i++){
+      const id=itemIdArr[i];
+      setProgress(15+Math.round((i/itemIdArr.length)*50),`Fetching market price (${i+1}/${itemIdArr.length})...`);
+      try{
+        const mkt=await apiCall(`market/${id}/itemmarket?limit=5`);
+        const listings=mkt.itemmarket?.listings||[];
+        // Use cheapest listing price, fallback to average
+        if(listings.length>0){
+          itemPrices[id]=listings[0].price;
+        }else{
+          itemPrices[id]=mkt.itemmarket?.item?.average_price||0;
+        }
+      }catch(e){
+        itemPrices[id]=0;
+      }
+      if(i<itemIdArr.length-1)await sleep(650);
+    }
+
+    // 4. Fetch points price if needed
+    let pointPrice=0;
+    if(needPoints){
+      setProgress(70,'Fetching points market...');
+      try{
+        const pm=await apiCallV1('market/?selections=pointsmarket');
+        const entries=Object.values(pm.pointsmarket||{});
+        if(entries.length>0){
+          pointPrice=Math.min(...entries.map(e=>e.cost));
+        }
+      }catch(e){pointPrice=0}
+    }
+
+    setProgress(80,'Calculating ROI...');
+
+    // 5. Build rows
+    rows=[];
+    for(const s of activeStocks){
+      const div=DIVIDEND_MAP[s.id];
+      const price=s.market.price;
+      const baseReq=s.bonus.requirement;
+      const freq=s.bonus.frequency;
+      const payoutsPerYear=365.25/freq;
+
+      // Determine dividend value
+      let divValue=0;
+      let divLabel=div.label;
+      if(div.type==='cash'){
+        divValue=div.amount;
+      }else if(div.type==='item'){
+        divValue=(itemPrices[div.itemId]||0)*div.qty;
+      }else if(div.type==='points'){
+        divValue=div.amount*pointPrice;
+      }else if(div.type==='energy'||div.type==='nerve'||div.type==='happiness'||div.type==='special'){
+        divValue=0; // Can't be easily valued
+        divLabel+=' (N/A)';
+      }
+
+      for(let inc=1;inc<=3;inc++){
+        const sharesNeeded=baseReq*Math.pow(2,inc-1);
+        const cost=sharesNeeded*price;
+        const annualReturn=divValue*payoutsPerYear;
+        const roi=cost>0&&divValue>0?(annualReturn/cost)*100:0;
+
+        rows.push({
+          stockId:s.id,
+          stockName:s.name,
+          stockAcronym:s.acronym,
+          stockLogo:s.images.logo,
+          stock:s.acronym+' - '+s.name,
+          increment:inc,
+          sharePrice:price,
+          sharesRequired:sharesNeeded,
+          investmentCost:cost,
+          dividend:divLabel,
+          dividendValue:divValue,
+          dividendRaw:divValue,
+          frequency:freq,
+          frequencyRaw:freq,
+          annualReturn:annualReturn,
+          roi:roi
+        });
+      }
+    }
+
+    setProgress(95,'Rendering...');
+    renderTable();
+    updateSummary(activeStocks.length);
+    document.getElementById('summary').style.display='flex';
+    document.getElementById('tableWrap').style.display='block';
+    document.getElementById('lastUpdated').textContent='Updated: '+new Date().toLocaleTimeString();
+    setProgress(100,'Done');
+    await sleep(500);
+    showProgress(false);
+  }catch(e){
+    alert('Error: '+e.message);
+    showProgress(false);
+  }finally{
+    refreshBtn.disabled=false;
+  }
+}
+
+function updateSummary(stockCount){
+  document.getElementById('totalStocks').textContent=stockCount;
+  document.getElementById('dataPoints').textContent=rows.length;
+  const first=rows.filter(r=>r.increment===1&&r.roi>0).sort((a,b)=>b.roi-a.roi);
+  if(first.length>0){
+    document.getElementById('bestRoi').textContent=first[0].roi.toFixed(2)+'%';
+    document.getElementById('bestStock').textContent=first[0].stockAcronym;
+  }
+}
+
+// ===== RENDER =====
+function renderTable(){
+  renderHeader();
+  renderBody();
+}
+
+function renderHeader(){
+  const tr=document.getElementById('headerRow');
+  tr.innerHTML='';
+  for(const key of columnOrder){
+    const col=COLUMNS.find(c=>c.key===key);
+    const th=document.createElement('th');
+    th.dataset.key=key;
+    th.draggable=true;
+    th.innerHTML=col.label+(col.sortable&&sortKey===key?`<span class="sort-arrow">${sortDir==='asc'?'▲':'▼'}</span>`:'');
+    if(col.sortable){
+      th.addEventListener('click',()=>{
+        if(sortKey===key){sortDir=sortDir==='asc'?'desc':'asc'}
+        else{sortKey=key;sortDir='desc'}
+        savePrefs();renderTable();
+      });
+    }
+    // Drag handlers
+    th.addEventListener('dragstart',e=>{dragCol=key;th.classList.add('dragging');e.dataTransfer.effectAllowed='move'});
+    th.addEventListener('dragend',()=>{dragCol=null;document.querySelectorAll('th').forEach(t=>t.classList.remove('dragging','drag-over'))});
+    th.addEventListener('dragover',e=>{e.preventDefault();th.classList.add('drag-over')});
+    th.addEventListener('dragleave',()=>th.classList.remove('drag-over'));
+    th.addEventListener('drop',e=>{
+      e.preventDefault();th.classList.remove('drag-over');
+      if(!dragCol||dragCol===key)return;
+      const from=columnOrder.indexOf(dragCol);
+      const to=columnOrder.indexOf(key);
+      columnOrder.splice(from,1);
+      columnOrder.splice(to,0,dragCol);
+      savePrefs();renderTable();
+    });
+    tr.appendChild(th);
+  }
+}
+
+function renderBody(){
+  const tbody=document.getElementById('tableBody');
+  tbody.innerHTML='';
+
+  // Sort
+  const sorted=[...rows].sort((a,b)=>{
+    const col=COLUMNS.find(c=>c.key===sortKey);
+    let av=a[sortKey],bv=b[sortKey];
+    if(col&&col.type==='string'){
+      av=(av||'').toString().toLowerCase();bv=(bv||'').toString().toLowerCase();
+      return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
+    }
+    av=Number(av)||0;bv=Number(bv)||0;
+    return sortDir==='asc'?av-bv:bv-av;
+  });
+
+  // Track stock groups for alternating backgrounds
+  let lastStock='';let groupIdx=0;
+  for(const row of sorted){
+    if(row.stockAcronym!==lastStock){groupIdx++;lastStock=row.stockAcronym}
+    const tr=document.createElement('tr');
+    if(groupIdx%2===0)tr.classList.add('group-even');
+
+    for(const key of columnOrder){
+      const td=document.createElement('td');
+      td.innerHTML=formatCell(key,row);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+function formatCell(key,row){
+  switch(key){
+    case 'stock':
+      return `<img src="${row.stockLogo}" class="stock-logo" alt="" onerror="this.style.display='none'">${row.stockAcronym} - ${row.stockName}`;
+    case 'increment':
+      return `<span class="increment-badge">${row.increment}</span>`;
+    case 'sharePrice':
+      return '$'+fmtNum(row.sharePrice,2);
+    case 'sharesRequired':
+      return fmtNum(row.sharesRequired,0);
+    case 'investmentCost':
+      return '$'+fmtNum(row.investmentCost,0);
+    case 'dividend':
+      return `<span class="dividend-label">${row.dividend}</span>`;
+    case 'dividendValue':
+      return row.dividendValue>0?'$'+fmtNum(row.dividendValue,0):'<span style="color:#555">N/A</span>';
+    case 'frequency':
+      return row.frequency+' days';
+    case 'annualReturn':
+      return row.annualReturn>0?'$'+fmtNum(row.annualReturn,0):'<span style="color:#555">N/A</span>';
+    case 'roi':
+      if(row.roi<=0)return '<span style="color:#555">N/A</span>';
+      const cls=row.roi>=50?'roi-high':row.roi>=25?'roi-mid':'roi-low';
+      return `<span class="${cls}">${row.roi.toFixed(2)}%</span>`;
+    default:return '';
+  }
+}
+
+function fmtNum(n,dec){
+  if(n===null||n===undefined)return'-';
+  return Number(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+
+// ===== UTILS =====
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function showProgress(show){
+  document.getElementById('progressWrap').classList.toggle('active',show);
+  document.getElementById('progressText').classList.toggle('active',show);
+}
+function setProgress(pct,text){
+  document.getElementById('progressBar').style.width=pct+'%';
+  document.getElementById('progressText').textContent=text||'';
+}
+</script>
+</body>
+</html>
