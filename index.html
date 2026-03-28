@@ -133,10 +133,13 @@ tr.group-even:hover td{background:rgba(233,69,96,0.08)}
 </div>
 
 <div class="footer">
-  Torn Stock ROI Calculator &middot; Data from <a href="https://www.torn.com/api.html" target="_blank">Torn API v2</a> &middot; <a href="https://github.com/tkph/Torn-Stock-Tool" target="_blank">GitHub</a>
+  Torn Stock ROI Calculator v<span id="versionDisplay"></span> &middot; Data from <a href="https://www.torn.com/api.html" target="_blank">Torn API v2</a> &middot; <a href="https://github.com/tkph/Torn-Stock-Tool" target="_blank">GitHub</a>
 </div>
 
 <script>
+const VERSION = '1.1.0';
+document.getElementById('versionDisplay').textContent = VERSION;
+
 // ===== CONFIG =====
 const COLUMNS = [
   {key:'ticker',label:'Ticker',sortable:true,type:'string'},
@@ -211,7 +214,7 @@ function savePrefs(){
 function loadPrefs(){
   try{
     const co=localStorage.getItem('tornStockColOrder');
-    if(co){const parsed=JSON.parse(co);if(parsed.length===COLUMNS.length)columnOrder=parsed}
+    if(co){const parsed=JSON.parse(co);const allKeys=COLUMNS.map(c=>c.key);if(parsed.length===allKeys.length&&allKeys.every(k=>parsed.includes(k)))columnOrder=parsed}
     const sk=localStorage.getItem('tornStockSortKey');if(sk)sortKey=sk;
     const sd=localStorage.getItem('tornStockSortDir');if(sd)sortDir=sd;
   }catch(e){}
