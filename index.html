@@ -110,6 +110,7 @@ tr.group-even:hover td{background:rgba(233,69,96,0.08)}
   <h1>Torn Stock ROI Calculator</h1>
   <div class="header-right">
     <span id="lastUpdated" style="font-size:11px;color:#888"></span>
+    <button class="btn" id="exportBtn" onclick="exportCSV()" disabled>Export CSV</button>
     <button class="btn" id="refreshBtn" onclick="refreshData()" disabled>Refresh</button>
     <button class="btn" onclick="logout()">Logout</button>
   </div>
@@ -137,7 +138,7 @@ tr.group-even:hover td{background:rgba(233,69,96,0.08)}
 </div>
 
 <script>
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 document.getElementById('versionDisplay').textContent = VERSION;
 
 // ===== CONFIG =====
@@ -275,6 +276,7 @@ function logout(){
   document.getElementById('apiKeyInput').value='';
   document.getElementById('summary').style.display='none';
   document.getElementById('tableWrap').style.display='none';
+  document.getElementById('exportBtn').disabled=true;
 }
 
 // ===== DATA FETCH =====
@@ -405,6 +407,7 @@ async function refreshData(){
     document.getElementById('summary').style.display='flex';
     document.getElementById('tableWrap').style.display='block';
     document.getElementById('lastUpdated').textContent='Updated: '+new Date().toLocaleTimeString();
+    document.getElementById('exportBtn').disabled=false;
     setProgress(100,'Done');
     await sleep(500);
     showProgress(false);
@@ -537,6 +540,61 @@ function getRoiClass(roi){
 function fmtNum(n,dec){
   if(n===null||n===undefined)return'-';
   return Number(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+
+// ===== EXPORT =====
+function exportCSV(){
+  if(rows.length===0)return;
+
+  // Use current sort order
+  const sorted=[...rows].sort((a,b)=>{
+    const col=COLUMNS.find(c=>c.key===sortKey);
+    let av=a[sortKey],bv=b[sortKey];
+    if(col&&col.type==='string'){
+      av=(av||'').toString().toLowerCase();bv=(bv||'').toString().toLowerCase();
+      return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
+    }
+    av=Number(av)||0;bv=Number(bv)||0;
+    return sortDir==='asc'?av-bv:bv-av;
+  });
+
+  // Build header row using current column order
+  const headers=columnOrder.map(key=>{
+    const col=COLUMNS.find(c=>c.key===key);
+    return col.label;
+  });
+
+  // Build data rows with raw values
+  const csvRows=[headers.join(',')];
+  for(const row of sorted){
+    const vals=columnOrder.map(key=>{
+      switch(key){
+        case 'ticker': return row.ticker;
+        case 'stockName': return '"'+row.stockName.replace(/"/g,'""')+'"';
+        case 'increment': return row.increment;
+        case 'sharePrice': return row.sharePrice.toFixed(2);
+        case 'sharesRequired': return row.sharesRequired;
+        case 'investmentCost': return Math.round(row.investmentCost);
+        case 'dividend': return '"'+row.dividend.replace(/"/g,'""')+'"';
+        case 'dividendValue': return row.dividendValue>0?Math.round(row.dividendValue):'N/A';
+        case 'frequency': return row.frequency;
+        case 'annualReturn': return row.annualReturn>0?Math.round(row.annualReturn):'N/A';
+        case 'roi': return row.roi>0?row.roi.toFixed(2):'N/A';
+        case 'owned': return row.owned?'Yes':'No';
+        default: return '';
+      }
+    });
+    csvRows.push(vals.join(','));
+  }
+
+  const csv=csvRows.join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='torn_stock_roi_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ===== UTILS =====
